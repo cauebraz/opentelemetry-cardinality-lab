@@ -165,6 +165,15 @@ dependency is exact in `pyproject.toml` and resolved transitively in `uv.lock`.
   treating one run as universal evidence.
 - The configured threshold is deliberately small to keep the experiment fast.
 
+## Report a mismatch
+
+When a run against your own workload produces numbers that differ from the
+tables here or in the article, open an issue in this repository with the
+enforcement mode, the scenario or benchmark suite, the Collector version, and
+the `results/results.json` or `results/benchmark/results.json` the run
+produced. A collector log from `results/` helps when the processor was
+expected to enforce and did not.
+
 ## Source material
 
 - [Cardinality Guardian processor](https://github.com/open-telemetry/opentelemetry-collector-contrib/tree/v0.162.0/processor/cardinalityguardianprocessor)

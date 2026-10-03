@@ -1,0 +1,32 @@
+[project]
+name = "otel-cardinality-lab"
+version = "0.1.0"
+description = "Reproducible experiments for the OpenTelemetry Cardinality Guardian processor"
+requires-python = "==3.14.*"
+dependencies = [
+  "grpcio==1.84.0",
+  "opentelemetry-exporter-otlp-proto-grpc==1.45.0",
+  "opentelemetry-proto==1.45.0",
+  "opentelemetry-sdk==1.45.0",
+  "protobuf==7.36.2",
+]
+
+[dependency-groups]
+dev = [
+  "pytest==9.1.1",
+  "ruff==0.16.10",
+]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 88
+target-version = "py314"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM", "RUF"]
+
+[tool.uv]
+package = false

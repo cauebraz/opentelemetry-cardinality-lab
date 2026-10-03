@@ -1,0 +1,59 @@
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+
+processors:
+  cardinality_guardian:
+    max_cardinality_delta_per_epoch: ${env:CARDINALITY_THRESHOLD}
+    epoch_duration_seconds: ${env:EPOCH_SECONDS}
+    enforcement_mode: ${env:ENFORCEMENT_MODE}
+    never_drop_labels:
+      - region
+      - environment
+      - service.name
+    top_offenders_count: 20
+    max_tracker_count: 10000
+    drop_log_max_per_epoch: 5
+  batch:
+    send_batch_size: 512
+    timeout: 1s
+
+exporters:
+  prometheus:
+    endpoint: 0.0.0.0:9464
+    metric_expiration: 5m
+    resource_constant_labels:
+      included:
+        - service.name
+        - scenario
+    translation_strategy: UnderscoreEscapingWithSuffixes
+
+extensions:
+  health_check:
+    endpoint: 0.0.0.0:13133
+
+service:
+  extensions:
+    - health_check
+  pipelines:
+    metrics:
+      receivers:
+        - otlp
+      processors:
+        - cardinality_guardian
+        - batch
+      exporters:
+        - prometheus
+  telemetry:
+    metrics:
+      level: detailed
+      readers:
+        - pull:
+            exporter:
+              prometheus:
+                host: 0.0.0.0
+                port: 8888
+                without_type_suffix: true
+                without_units: true

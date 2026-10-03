@@ -1,0 +1,28 @@
+FROM alpine:3.23.3@sha256:25109184c71bdad752c8312a8623239686a9a2071e8825f20acb8f2198c3f659 AS download
+
+ARG OTELCOL_VERSION=0.162.0
+ARG TARGETARCH
+ARG OTELCOL_SHA256_AMD64=fcc063749f730f8c21fe29f2d340ff174f5f1c5885bd3156fb6c985a3036fcc3
+ARG OTELCOL_SHA256_ARM64=ecf6a917e2b53beb1703b19a84bc4e112a2fcaba549639cf6b0ba58446bfd7d2
+
+WORKDIR /tmp/otelcol
+
+RUN case "${TARGETARCH}" in \
+      amd64) sha256="${OTELCOL_SHA256_AMD64}" ;; \
+      arm64) sha256="${OTELCOL_SHA256_ARM64}" ;; \
+      *) echo "unsupported architecture: ${TARGETARCH}" >&2; exit 1 ;; \
+    esac \
+    && wget -q -O otelcol.tar.gz \
+      "https://github.com/open-telemetry/opentelemetry-collector-releases/releases/download/v${OTELCOL_VERSION}/otelcol-contrib_${OTELCOL_VERSION}_linux_${TARGETARCH}.tar.gz" \
+    && echo "${sha256}  otelcol.tar.gz" | sha256sum -c - \
+    && tar -xzf otelcol.tar.gz \
+    && chmod 0755 otelcol-contrib
+
+FROM scratch
+
+COPY --from=download /tmp/otelcol/otelcol-contrib /otelcol-contrib
+
+USER 65532:65532
+EXPOSE 4317 8888 9464 13133
+ENTRYPOINT ["/otelcol-contrib"]
+CMD ["--config=/etc/otelcol-contrib/config.yaml"]

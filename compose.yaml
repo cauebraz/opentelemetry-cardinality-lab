@@ -1,0 +1,52 @@
+name: otel-cardinality-lab
+
+services:
+  collector:
+    build:
+      context: .
+      dockerfile: Dockerfile.collector
+      args:
+        OTELCOL_VERSION: "0.162.0"
+        OTELCOL_SHA256_AMD64: "fcc063749f730f8c21fe29f2d340ff174f5f1c5885bd3156fb6c985a3036fcc3"
+        OTELCOL_SHA256_ARM64: "ecf6a917e2b53beb1703b19a84bc4e112a2fcaba549639cf6b0ba58446bfd7d2"
+    environment:
+      ENFORCEMENT_MODE: "${ENFORCEMENT_MODE:-tag_only}"
+      CARDINALITY_THRESHOLD: "${CARDINALITY_THRESHOLD:-20}"
+      EPOCH_SECONDS: "${EPOCH_SECONDS:-10}"
+    volumes:
+      - ${COLLECTOR_CONFIG:-./config/collector.yaml}:/etc/otelcol-contrib/config.yaml:ro
+    ports:
+      - "127.0.0.1:14317:4317"
+      - "127.0.0.1:18888:8888"
+      - "127.0.0.1:19464:9464"
+      - "127.0.0.1:13133:13133"
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+
+  prometheus:
+    image: prom/prometheus:v3.15.0@sha256:efd719c99d83b060d9daefdcf00360461adf279f45ef5391f8d111892118753e
+    command:
+      - --config.file=/etc/prometheus/prometheus.yaml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=1h
+      - --web.enable-lifecycle
+    volumes:
+      - ./config/prometheus.yaml:/etc/prometheus/prometheus.yaml:ro
+      - prometheus-data:/prometheus
+    ports:
+      - "127.0.0.1:19090:9090"
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+
+volumes:
+  prometheus-data:

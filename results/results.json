@@ -1,0 +1,711 @@
+{
+  "assertion_failures": [],
+  "collected_at": "2026-10-03T04:25:37.207860+00:00",
+  "modes": [
+    "tag_only",
+    "overflow_attribute",
+    "strip_and_reaggregate"
+  ],
+  "parameters": {
+    "epoch_seconds": 10,
+    "points": 200,
+    "repetitions": 3,
+    "threshold": 20
+  },
+  "platform": "macOS-27.0-arm64-arm-64bit-Mach-O",
+  "runs": [
+    {
+      "collector_stats": {
+        "CPUPerc": "2.52%",
+        "MemPerc": "0.88%",
+        "MemUsage": "70.15MiB / 7.746GiB"
+      },
+      "elapsed_seconds": 18.693,
+      "emissions": [
+        {
+          "elapsed_seconds": 0.00668,
+          "endpoint": "localhost:14317",
+          "points": 200,
+          "scenario": "stable"
+        },
+        {
+          "elapsed_seconds": 0.006788,
+          "endpoint": "localhost:14317",
+          "points": 200,
+          "scenario": "user-id"
+        },
+        {
+          "elapsed_seconds": 0.010388,
+          "endpoint": "localhost:14317",
+          "points": 200,
+          "scenario": "unbounded-route"
+        },
+        {
+          "elapsed_seconds": 0.01057,
+          "endpoint": "localhost:14317",
+          "points": 200,
+          "scenario": "histogram"
+        }
+      ],
+      "labels": {
+        "histogram": {
+          "dynamic_attribute": "user_id",
+          "dynamic_label_series": 200,
+          "overflow_marker_series": 180,
+          "overflow_values": []
+        },
+        "stable": {
+          "dynamic_attribute": null,
+          "dynamic_label_series": 0,
+          "overflow_marker_series": 0,
+          "overflow_values": []
+        },
+        "unbounded-route": {
+          "dynamic_attribute": "http_route",
+          "dynamic_label_series": 200,
+          "overflow_marker_series": 180,
+          "overflow_values": []
+        },
+        "user-id": {
+          "dynamic_attribute": "user_id",
+          "dynamic_label_series": 200,
+          "overflow_marker_series": 180,
+          "overflow_values": []
+        }
+      },
+      "mode": "tag_only",
+      "repetition": 1,
+      "self_metrics": {
+        "otelcol_processor_cardinality_labels.stripped": 0.0,
+        "otelcol_processor_cardinality_savings.estimated": 0.0,
+        "otelcol_processor_cardinality_top.offenders": 196.0,
+        "otelcol_processor_cardinality_trackers.active": 4.0,
+        "otelcol_processor_cardinality_trackers.rejected": 0.0
+      },
+      "series": {
+        "histogram": 200,
+        "stable": 4,
+        "unbounded-route": 200,
+        "user-id": 200
+      }
+    },
+    {
+      "collector_stats": {
+        "CPUPerc": "2.39%",
+        "MemPerc": "0.83%",
+        "MemUsage": "65.62MiB / 7.746GiB"
+      },
+      "elapsed_seconds": 15.112,
+      "emissions": [
+        {
+          "elapsed_seconds": 0.005245,
+          "endpoint": "localhost:14317",
+          "points": 200,
+          "scenario": "stable"
+        },
+        {
+          "elapsed_seconds": 0.010263,
+          "endpoint": "localhost:14317",
+          "points": 200,
+          "scenario": "user-id"
+        },
+        {
+          "elapsed_seconds": 0.008536,
+          "endpoint": "localhost:14317",
+          "points": 200,
+          "scenario": "unbounded-route"
+        },
+        {
+          "elapsed_seconds": 0.01079,
+          "endpoint": "localhost:14317",
+          "points": 200,
+          "scenario": "histogram"
+        }
+      ],
+      "labels": {
+        "histogram": {
+          "dynamic_attribute": "user_id",
+          "dynamic_label_series": 200,
+          "overflow_marker_series": 180,
+          "overflow_values": []
+        },
+        "stable": {
+          "dynamic_attribute": null,
+          "dynamic_label_series": 0,
+          "overflow_marker_series": 0,
+          "overflow_values": []
+        },
+        "unbounded-route": {
+          "dynamic_attribute": "http_route",
+          "dynamic_label_series": 200,
+          "overflow_marker_series": 180,
+          "overflow_values": []
+        },
+        "user-id": {
+          "dynamic_attribute": "user_id",
+          "dynamic_label_series": 200,
+          "overflow_marker_series": 180,
+          "overflow_values": []
+        }
+      },
+      "mode": "tag_only",
+      "repetition": 2,
+      "self_metrics": {
+        "otelcol_processor_cardinality_labels.stripped": 0.0,
+        "otelcol_processor_cardinality_savings.estimated": 0.0,
+        "otelcol_processor_cardinality_top.offenders": 388.0,
+        "otelcol_processor_cardinality_trackers.active": 4.0,
+        "otelcol_processor_cardinality_trackers.rejected": 0.0
+      },
+      "series": {
+        "histogram": 200,
+        "stable": 4,
+        "unbounded-route": 200,
+        "user-id": 200
+      }
+    },
+    {
+      "collector_stats": {
+        "CPUPerc": "2.53%",
+        "MemPerc": "0.88%",
+        "MemUsage": "69.88MiB / 7.746GiB"
+      },
+      "elapsed_seconds": 18.697,
+      "emissions": [
+        {
+          "elapsed_seconds": 0.00504,
+          "endpoint": "localhost:14317",
+          "points": 200,
+          "scenario": "stable"
+        },
+        {
+          "elapsed_seconds": 0.010324,
+          "endpoint": "localhost:14317",
+          "points": 200,
+          "scenario": "user-id"
+        },
+        {
+          "elapsed_seconds": 0.010128,
+          "endpoint": "localhost:14317",
+          "points": 200,
+          "scenario": "unbounded-route"
+        },
+        {
+          "elapsed_seconds": 0.011662,
+          "endpoint": "localhost:14317",
+          "points": 200,
+          "scenario": "histogram"
+        }
+      ],
+      "labels": {
+        "histogram": {
+          "dynamic_attribute": "user_id",
+          "dynamic_label_series": 200,
+          "overflow_marker_series": 180,
+          "overflow_values": []
+        },
+        "stable": {
+          "dynamic_attribute": null,
+          "dynamic_label_series": 0,
+          "overflow_marker_series": 0,
+          "overflow_values": []
+        },
+        "unbounded-route": {
+          "dynamic_attribute": "http_route",
+          "dynamic_label_series": 200,
+          "overflow_marker_series": 180,
+          "overflow_values": []
+        },
+        "user-id": {
+          "dynamic_attribute": "user_id",
+          "dynamic_label_series": 200,
+          "overflow_marker_series": 180,
+          "overflow_values": []
+        }
+      },
+      "mode": "tag_only",
+      "repetition": 3,
+      "self_metrics": {
+        "otelcol_processor_cardinality_labels.stripped": 0.0,
+        "otelcol_processor_cardinality_savings.estimated": 0.0,
+        "otelcol_processor_cardinality_top.offenders": 196.0,
+        "otelcol_processor_cardinality_trackers.active": 4.0,
+        "otelcol_processor_cardinality_trackers.rejected": 0.0
+      },
+      "series": {
+        "histogram": 200,
+        "stable": 4,
+        "unbounded-route": 200,
+        "user-id": 200
+      }
+    },
+    {
+      "collector_stats": {
+        "CPUPerc": "2.16%",
+        "MemPerc": "0.73%",
+        "MemUsage": "57.68MiB / 7.746GiB"
+      },
+      "elapsed_seconds": 15.49,
+      "emissions": [
+        {
+          "elapsed_seconds": 0.004846,
+          "endpoint": "localhost:14317",
+          "points": 200,
+          "scenario": "stable"
+        },
+        {
+          "elapsed_seconds": 0.011811,
+          "endpoint": "localhost:14317",
+          "points": 200,
+          "scenario": "user-id"
+        },
+        {
+          "elapsed_seconds": 0.010041,
+          "endpoint": "localhost:14317",
+          "points": 200,
+          "scenario": "unbounded-route"
+        },
+        {
+          "elapsed_seconds": 0.012333,
+          "endpoint": "localhost:14317",
+          "points": 200,
+          "scenario": "histogram"
+        }
+      ],
+      "labels": {
+        "histogram": {
+          "dynamic_attribute": "user_id",
+          "dynamic_label_series": 200,
+          "overflow_marker_series": 180,
+          "overflow_values": []
+        },
+        "stable": {
+          "dynamic_attribute": null,
+          "dynamic_label_series": 0,
+          "overflow_marker_series": 0,
+          "overflow_values": []
+        },
+        "unbounded-route": {
+          "dynamic_attribute": "http_route",
+          "dynamic_label_series": 21,
+          "overflow_marker_series": 0,
+          "overflow_values": [
+            "otel.cardinality_overflow"
+          ]
+        },
+        "user-id": {
+          "dynamic_attribute": "user_id",
+          "dynamic_label_series": 21,
+          "overflow_marker_series": 0,
+          "overflow_values": [
+            "otel.cardinality_overflow"
+          ]
+        }
+      },
+      "mode": "overflow_attribute",
+      "repetition": 1,
+      "self_metrics": {
+        "otelcol_processor_cardinality_labels.stripped": 0.0,
+        "otelcol_processor_cardinality_savings.estimated": 0.0,
+        "otelcol_processor_cardinality_top.offenders": 388.0,
+        "otelcol_processor_cardinality_trackers.active": 4.0,
+        "otelcol_processor_cardinality_trackers.rejected": 0.0
+      },
+      "series": {
+        "histogram": 200,
+        "stable": 4,
+        "unbounded-route": 21,
+        "user-id": 21
+      }
+    },
+    {
+      "collector_stats": {
+        "CPUPerc": "2.17%",
+        "MemPerc": "0.75%",
+        "MemUsage": "59.65MiB / 7.746GiB"
+      },
+      "elapsed_seconds": 15.122,
+      "emissions": [
+        {
+          "elapsed_seconds": 0.005126,
+          "endpoint": "localhost:14317",
+          "points": 200,
+          "scenario": "stable"
+        },
+        {
+          "elapsed_seconds": 0.010202,
+          "endpoint": "localhost:14317",
+          "points": 200,
+          "scenario": "user-id"
+        },
+        {
+          "elapsed_seconds": 0.009024,
+          "endpoint": "localhost:14317",
+          "points": 200,
+          "scenario": "unbounded-route"
+        },
+        {
+          "elapsed_seconds": 0.012396,
+          "endpoint": "localhost:14317",
+          "points": 200,
+          "scenario": "histogram"
+        }
+      ],
+      "labels": {
+        "histogram": {
+          "dynamic_attribute": "user_id",
+          "dynamic_label_series": 200,
+          "overflow_marker_series": 180,
+          "overflow_values": []
+        },
+        "stable": {
+          "dynamic_attribute": null,
+          "dynamic_label_series": 0,
+          "overflow_marker_series": 0,
+          "overflow_values": []
+        },
+        "unbounded-route": {
+          "dynamic_attribute": "http_route",
+          "dynamic_label_series": 21,
+          "overflow_marker_series": 0,
+          "overflow_values": [
+            "otel.cardinality_overflow"
+          ]
+        },
+        "user-id": {
+          "dynamic_attribute": "user_id",
+          "dynamic_label_series": 21,
+          "overflow_marker_series": 0,
+          "overflow_values": [
+            "otel.cardinality_overflow"
+          ]
+        }
+      },
+      "mode": "overflow_attribute",
+      "repetition": 2,
+      "self_metrics": {
+        "otelcol_processor_cardinality_labels.stripped": 0.0,
+        "otelcol_processor_cardinality_savings.estimated": 0.0,
+        "otelcol_processor_cardinality_top.offenders": 388.0,
+        "otelcol_processor_cardinality_trackers.active": 4.0,
+        "otelcol_processor_cardinality_trackers.rejected": 0.0
+      },
+      "series": {
+        "histogram": 200,
+        "stable": 4,
+        "unbounded-route": 21,
+        "user-id": 21
+      }
+    },
+    {
+      "collector_stats": {
+        "CPUPerc": "2.13%",
+        "MemPerc": "0.75%",
+        "MemUsage": "59.7MiB / 7.746GiB"
+      },
+      "elapsed_seconds": 17.182,
+      "emissions": [
+        {
+          "elapsed_seconds": 0.005127,
+          "endpoint": "localhost:14317",
+          "points": 200,
+          "scenario": "stable"
+        },
+        {
+          "elapsed_seconds": 0.010613,
+          "endpoint": "localhost:14317",
+          "points": 200,
+          "scenario": "user-id"
+        },
+        {
+          "elapsed_seconds": 0.010139,
+          "endpoint": "localhost:14317",
+          "points": 200,
+          "scenario": "unbounded-route"
+        },
+        {
+          "elapsed_seconds": 0.01213,
+          "endpoint": "localhost:14317",
+          "points": 200,
+          "scenario": "histogram"
+        }
+      ],
+      "labels": {
+        "histogram": {
+          "dynamic_attribute": "user_id",
+          "dynamic_label_series": 200,
+          "overflow_marker_series": 180,
+          "overflow_values": []
+        },
+        "stable": {
+          "dynamic_attribute": null,
+          "dynamic_label_series": 0,
+          "overflow_marker_series": 0,
+          "overflow_values": []
+        },
+        "unbounded-route": {
+          "dynamic_attribute": "http_route",
+          "dynamic_label_series": 21,
+          "overflow_marker_series": 0,
+          "overflow_values": [
+            "otel.cardinality_overflow"
+          ]
+        },
+        "user-id": {
+          "dynamic_attribute": "user_id",
+          "dynamic_label_series": 21,
+          "overflow_marker_series": 0,
+          "overflow_values": [
+            "otel.cardinality_overflow"
+          ]
+        }
+      },
+      "mode": "overflow_attribute",
+      "repetition": 3,
+      "self_metrics": {
+        "otelcol_processor_cardinality_labels.stripped": 0.0,
+        "otelcol_processor_cardinality_savings.estimated": 0.0,
+        "otelcol_processor_cardinality_top.offenders": 388.0,
+        "otelcol_processor_cardinality_trackers.active": 4.0,
+        "otelcol_processor_cardinality_trackers.rejected": 0.0
+      },
+      "series": {
+        "histogram": 200,
+        "stable": 4,
+        "unbounded-route": 21,
+        "user-id": 21
+      }
+    },
+    {
+      "collector_stats": {
+        "CPUPerc": "1.57%",
+        "MemPerc": "0.71%",
+        "MemUsage": "56.65MiB / 7.746GiB"
+      },
+      "elapsed_seconds": 18.19,
+      "emissions": [
+        {
+          "elapsed_seconds": 0.004839,
+          "endpoint": "localhost:14317",
+          "points": 200,
+          "scenario": "stable"
+        },
+        {
+          "elapsed_seconds": 0.01017,
+          "endpoint": "localhost:14317",
+          "points": 200,
+          "scenario": "user-id"
+        },
+        {
+          "elapsed_seconds": 0.014612,
+          "endpoint": "localhost:14317",
+          "points": 200,
+          "scenario": "unbounded-route"
+        },
+        {
+          "elapsed_seconds": 0.012494,
+          "endpoint": "localhost:14317",
+          "points": 200,
+          "scenario": "histogram"
+        }
+      ],
+      "labels": {
+        "histogram": {
+          "dynamic_attribute": "user_id",
+          "dynamic_label_series": 200,
+          "overflow_marker_series": 180,
+          "overflow_values": []
+        },
+        "stable": {
+          "dynamic_attribute": null,
+          "dynamic_label_series": 0,
+          "overflow_marker_series": 0,
+          "overflow_values": []
+        },
+        "unbounded-route": {
+          "dynamic_attribute": "http_route",
+          "dynamic_label_series": 20,
+          "overflow_marker_series": 0,
+          "overflow_values": []
+        },
+        "user-id": {
+          "dynamic_attribute": "user_id",
+          "dynamic_label_series": 20,
+          "overflow_marker_series": 0,
+          "overflow_values": []
+        }
+      },
+      "mode": "strip_and_reaggregate",
+      "repetition": 1,
+      "self_metrics": {
+        "otelcol_processor_cardinality_labels.stripped": 360.0,
+        "otelcol_processor_cardinality_savings.estimated": 18.0,
+        "otelcol_processor_cardinality_top.offenders": 196.0,
+        "otelcol_processor_cardinality_trackers.active": 4.0,
+        "otelcol_processor_cardinality_trackers.rejected": 0.0
+      },
+      "series": {
+        "histogram": 200,
+        "stable": 4,
+        "unbounded-route": 21,
+        "user-id": 21
+      }
+    },
+    {
+      "collector_stats": {
+        "CPUPerc": "2.26%",
+        "MemPerc": "0.73%",
+        "MemUsage": "57.89MiB / 7.746GiB"
+      },
+      "elapsed_seconds": 16.523,
+      "emissions": [
+        {
+          "elapsed_seconds": 0.005315,
+          "endpoint": "localhost:14317",
+          "points": 200,
+          "scenario": "stable"
+        },
+        {
+          "elapsed_seconds": 0.009178,
+          "endpoint": "localhost:14317",
+          "points": 200,
+          "scenario": "user-id"
+        },
+        {
+          "elapsed_seconds": 0.008226,
+          "endpoint": "localhost:14317",
+          "points": 200,
+          "scenario": "unbounded-route"
+        },
+        {
+          "elapsed_seconds": 0.011682,
+          "endpoint": "localhost:14317",
+          "points": 200,
+          "scenario": "histogram"
+        }
+      ],
+      "labels": {
+        "histogram": {
+          "dynamic_attribute": "user_id",
+          "dynamic_label_series": 200,
+          "overflow_marker_series": 180,
+          "overflow_values": []
+        },
+        "stable": {
+          "dynamic_attribute": null,
+          "dynamic_label_series": 0,
+          "overflow_marker_series": 0,
+          "overflow_values": []
+        },
+        "unbounded-route": {
+          "dynamic_attribute": "http_route",
+          "dynamic_label_series": 20,
+          "overflow_marker_series": 0,
+          "overflow_values": []
+        },
+        "user-id": {
+          "dynamic_attribute": "user_id",
+          "dynamic_label_series": 20,
+          "overflow_marker_series": 0,
+          "overflow_values": []
+        }
+      },
+      "mode": "strip_and_reaggregate",
+      "repetition": 2,
+      "self_metrics": {
+        "otelcol_processor_cardinality_labels.stripped": 360.0,
+        "otelcol_processor_cardinality_savings.estimated": 18.0,
+        "otelcol_processor_cardinality_top.offenders": 388.0,
+        "otelcol_processor_cardinality_trackers.active": 4.0,
+        "otelcol_processor_cardinality_trackers.rejected": 0.0
+      },
+      "series": {
+        "histogram": 200,
+        "stable": 4,
+        "unbounded-route": 21,
+        "user-id": 21
+      }
+    },
+    {
+      "collector_stats": {
+        "CPUPerc": "1.85%",
+        "MemPerc": "0.73%",
+        "MemUsage": "57.89MiB / 7.746GiB"
+      },
+      "elapsed_seconds": 15.139,
+      "emissions": [
+        {
+          "elapsed_seconds": 0.004939,
+          "endpoint": "localhost:14317",
+          "points": 200,
+          "scenario": "stable"
+        },
+        {
+          "elapsed_seconds": 0.011049,
+          "endpoint": "localhost:14317",
+          "points": 200,
+          "scenario": "user-id"
+        },
+        {
+          "elapsed_seconds": 0.013593,
+          "endpoint": "localhost:14317",
+          "points": 200,
+          "scenario": "unbounded-route"
+        },
+        {
+          "elapsed_seconds": 0.012714,
+          "endpoint": "localhost:14317",
+          "points": 200,
+          "scenario": "histogram"
+        }
+      ],
+      "labels": {
+        "histogram": {
+          "dynamic_attribute": "user_id",
+          "dynamic_label_series": 200,
+          "overflow_marker_series": 180,
+          "overflow_values": []
+        },
+        "stable": {
+          "dynamic_attribute": null,
+          "dynamic_label_series": 0,
+          "overflow_marker_series": 0,
+          "overflow_values": []
+        },
+        "unbounded-route": {
+          "dynamic_attribute": "http_route",
+          "dynamic_label_series": 20,
+          "overflow_marker_series": 0,
+          "overflow_values": []
+        },
+        "user-id": {
+          "dynamic_attribute": "user_id",
+          "dynamic_label_series": 20,
+          "overflow_marker_series": 0,
+          "overflow_values": []
+        }
+      },
+      "mode": "strip_and_reaggregate",
+      "repetition": 3,
+      "self_metrics": {
+        "otelcol_processor_cardinality_labels.stripped": 360.0,
+        "otelcol_processor_cardinality_savings.estimated": 18.0,
+        "otelcol_processor_cardinality_top.offenders": 388.0,
+        "otelcol_processor_cardinality_trackers.active": 4.0,
+        "otelcol_processor_cardinality_trackers.rejected": 0.0
+      },
+      "series": {
+        "histogram": 200,
+        "stable": 4,
+        "unbounded-route": 21,
+        "user-id": 21
+      }
+    }
+  ],
+  "versions": {
+    "collector": "0.162.0",
+    "otel_python": "1.45.0",
+    "prometheus": "3.15.0",
+    "python": "3.14.8"
+  }
+}

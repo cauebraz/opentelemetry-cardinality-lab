@@ -41,7 +41,6 @@ def payload() -> dict:
             }
         )
     return {
-        "collected_at": "2026-10-03T01:00:00+00:00",
         "versions": {
             "collector": "0.162.0",
             "prometheus": "3.15.0",
@@ -71,5 +70,5 @@ def test_report_contains_measured_results() -> None:
     report = render_markdown(payload())
     assert "| tag_only | 4 | 200 | 200 | 200 |" in report
     assert "| strip_and_reaggregate | user-id | 20 | 0 |" in report
-    assert "Collected at: 2026-10-03T01:00:00+00:00" in report
+    assert "Collected at:" not in report
     assert "not vendor pricing estimates" in report

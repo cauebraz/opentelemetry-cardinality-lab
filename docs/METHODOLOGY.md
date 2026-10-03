@@ -1,6 +1,5 @@
 # Methodology
 
-- Designed: 2026-10-02
 - Environment: local Docker containers
 - External data: none
 - Primary output: active Prometheus series per source metric
@@ -27,9 +26,8 @@ This prevents prior runs from contributing historical series.
 - Repetitions: 3
 - OTLP temporality preference: delta
 
-Versions are release pins resolved on 2026-10-02. The remaining numbers are
-experiment parameters chosen on 2026-10-02 to trigger the processor without
-requiring production traffic.
+Versions are release pins. The remaining numbers are experiment parameters
+chosen to trigger the processor without requiring production traffic.
 
 ## Dependent variables
 

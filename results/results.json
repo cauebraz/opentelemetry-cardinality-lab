@@ -1,6 +1,5 @@
 {
   "assertion_failures": [],
-  "collected_at": "2026-10-03T04:25:37.207860+00:00",
   "modes": [
     "tag_only",
     "overflow_attribute",

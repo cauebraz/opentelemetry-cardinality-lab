@@ -1,6 +1,5 @@
 # OpenTelemetry Cardinality Guardian experiment
 
-- Collected at: 2026-10-03T04:25:37.207860+00:00
 - Collector: 0.162.0
 - Prometheus: 3.15.0
 - Python OpenTelemetry SDK: 1.45.0

@@ -3,7 +3,6 @@ import json
 import platform
 import time
 from dataclasses import dataclass, field
-from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -49,7 +48,7 @@ from cardinality_lab.workloads import (
     sustained_plan,
 )
 
-RESULTS_VERSION = 3
+RESULTS_VERSION = 4
 SERVICE_NAME = "otel-cardinality-lab"
 MATRIX_UNIQUE_VALUES = 200
 BURST_UNIQUE_VALUES = 2000
@@ -427,8 +426,6 @@ def resume_from(
     if previous.get("cases") != payload.get("cases"):
         raise ValueError(f"{source} contains different benchmark case definitions")
     payload["runs"] = list(previous["runs"])
-    payload["collected_at"] = previous["collected_at"]
-    payload["resumed_at"] = datetime.now(UTC).isoformat()
     done = {(run["case"], run["mode"], run["repetition"]) for run in payload["runs"]}
     if len(done) != len(payload["runs"]):
         raise ValueError(f"{source} contains duplicate run keys")
@@ -471,7 +468,6 @@ def main() -> None:
 
     payload: dict[str, Any] = {
         "results_version": RESULTS_VERSION,
-        "collected_at": datetime.now(UTC).isoformat(),
         "platform": platform.platform(),
         "versions": {
             "collector": "0.162.0",

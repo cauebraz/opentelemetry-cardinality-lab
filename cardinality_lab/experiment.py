@@ -2,7 +2,6 @@ import argparse
 import platform
 import time
 from dataclasses import asdict
-from datetime import UTC, datetime
 from typing import Any
 
 from cardinality_lab.generate import emit
@@ -144,7 +143,6 @@ def main() -> None:
         raise ValueError(f"--points must be greater than {THRESHOLD}")
 
     payload: dict[str, Any] = {
-        "collected_at": datetime.now(UTC).isoformat(),
         "platform": platform.platform(),
         "versions": {
             "collector": "0.162.0",

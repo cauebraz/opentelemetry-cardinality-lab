@@ -92,7 +92,6 @@
       "workload": "multiple-offenders"
     }
   ],
-  "collected_at": "2026-10-03T01:56:02.503703+00:00",
   "parameters": {
     "epoch_seconds": 10,
     "large_scale": false,
@@ -112,8 +111,7 @@
     "threshold": 20
   },
   "platform": "macOS-27.0-arm64-arm-64bit-Mach-O",
-  "results_version": 3,
-  "resumed_at": "2026-10-03T10:28:51.258955+00:00",
+  "results_version": 4,
   "runs": [
     {
       "case": "burst-single-epoch",

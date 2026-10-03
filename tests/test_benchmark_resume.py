@@ -25,7 +25,6 @@ CASES = [
 def recorded(**parameters: Any) -> dict[str, Any]:
     return {
         "results_version": RESULTS_VERSION,
-        "collected_at": "2026-10-03T00:00:00+00:00",
         "platform": "test",
         "versions": dict(VERSIONS),
         "parameters": {
@@ -47,7 +46,6 @@ def recorded(**parameters: Any) -> dict[str, Any]:
 
 def fresh() -> dict[str, Any]:
     return {
-        "collected_at": "2026-10-03T09:00:00+00:00",
         "platform": "test",
         "versions": dict(VERSIONS),
         "parameters": {
@@ -82,8 +80,8 @@ def test_recorded_runs_are_reused_and_skipped(tmp_path: Path) -> None:
         ("scale-100", "baseline", 1),
         ("scale-100", "baseline", 2),
     }
-    assert payload["collected_at"] == "2026-10-03T00:00:00+00:00"
-    assert "resumed_at" in payload
+    assert "collected_at" not in payload
+    assert "resumed_at" not in payload
 
 
 @pytest.mark.parametrize(

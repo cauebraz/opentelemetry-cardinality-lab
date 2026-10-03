@@ -1,7 +1,5 @@
 # Cardinality Guardian benchmark
 
-- Initial collection started at: 2026-10-03T01:56:02.503703+00:00
-- Last resumed at: 2026-10-03T10:28:51.258955+00:00
 - Platform: macOS-27.0-arm64-arm-64bit-Mach-O
 - Versions: collector 0.162.0, otel_proto 1.45.0, prometheus 3.15.0, python 3.14.8
 - Modes: baseline, tag_only, overflow_attribute, strip_and_reaggregate
@@ -16,7 +14,7 @@ Cells show the median across repetitions, with the min-max range in parentheses 
 
 The correctness suite is separate from this benchmark and is not re-run here. It asserts the exact series, label and overflow-marker counts the processor must produce, and it fails the run on any mismatch.
 
-- Source: `results/REPORT.md`, collected 2026-10-03T04:25:37.207860+00:00
+- Source: `results/REPORT.md`
 - Runs: 9 across modes tag_only, overflow_attribute, strip_and_reaggregate
 - Assertion failures: none
 

@@ -95,8 +95,7 @@ def payload() -> dict[str, Any]:
             for repetition in (1, 2, 3):
                 runs.append(run(suite, case, mode, repetition, unique))
     return {
-        "results_version": 3,
-        "collected_at": "2026-10-03T00:00:00+00:00",
+        "results_version": 4,
         "platform": "test",
         "versions": {"collector": "0.162.0"},
         "parameters": {
@@ -225,11 +224,3 @@ def test_report_names_unavailable_counters(payload: dict, tmp_path: Path) -> Non
     assert "did not expose these counters" in report
     assert "`otelcol_exporter_send_failed_metric_points`" in report
     assert "records them as `null`, not zero" in report
-
-
-def test_report_exposes_the_resume_window(payload: dict, tmp_path: Path) -> None:
-    payload["resumed_at"] = "2026-10-03T01:00:00+00:00"
-    payload["summary"] = summarize(payload)
-    report = render_markdown(payload, tmp_path / "benchmark")
-    assert "Initial collection started at: 2026-10-03T00:00:00+00:00" in report
-    assert "Last resumed at: 2026-10-03T01:00:00+00:00" in report

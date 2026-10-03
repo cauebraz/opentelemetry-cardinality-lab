@@ -31,22 +31,20 @@ The processor has three modes with different operational consequences:
 The upstream documentation states that delta sums and gauges support
 reaggregation, while cumulative sums, histograms, exponential histograms, and
 summaries fall back to `tag_only`. Source: OpenTelemetry Collector Contrib
-Cardinality Guardian README at tag `v0.162.0`, collected 2026-10-02.
+Cardinality Guardian README at tag `v0.162.0`.
 
 ## Finding
 
-In the local run collected on 2026-10-03, both enforcing modes reduced each
-modeled delta-counter explosion from 200 active series to 21, an 89.5% reduction.
-The same modes left the histogram at 200 active series. All three repetitions
-produced the same counts. Source: [`results/results.json`](results/results.json),
-collected 2026-10-03.
+In the local run, both enforcing modes reduced each modeled delta-counter
+explosion from 200 active series to 21, an 89.5% reduction. The same modes left
+the histogram at 200 active series. All three repetitions produced the same
+counts. Source: [`results/results.json`](results/results.json).
 
 ## Experiment
 
 The default run sends 200 data points per scenario, repeats every mode three
 times, and configures a threshold of 20 new values per 10-second epoch. Those
-numbers are experiment choices recorded on 2026-10-02, not production
-recommendations.
+numbers are experiment choices, not production recommendations.
 
 | Scenario | Metric | Label behavior | Question |
 | --- | --- | --- | --- |
@@ -146,9 +144,8 @@ just down
 - OpenTelemetry Python SDK and OTLP exporter `1.45.0`.
 - Python `3.14.8`.
 
-The versions were resolved from the latest stable upstream releases on
-2026-10-02. Every Python dependency is exact in `pyproject.toml` and resolved
-transitively in `uv.lock`.
+The versions were resolved from stable upstream releases. Every Python
+dependency is exact in `pyproject.toml` and resolved transitively in `uv.lock`.
 
 ## Boundaries
 

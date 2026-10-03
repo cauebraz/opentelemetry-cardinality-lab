@@ -51,7 +51,6 @@ def render_markdown(payload: dict[str, Any]) -> str:
     lines = [
         "# OpenTelemetry Cardinality Guardian experiment",
         "",
-        f"- Collected at: {payload['collected_at']}",
         f"- Collector: {payload['versions']['collector']}",
         f"- Prometheus: {payload['versions']['prometheus']}",
         f"- Python OpenTelemetry SDK: {payload['versions']['otel_python']}",

@@ -1,5 +1,6 @@
 import json
 import os
+import re
 import subprocess
 from pathlib import Path
 from typing import Any
@@ -81,6 +82,7 @@ def stop(environment: dict[str, str] | None = None) -> None:
 
 
 STATS_FIELDS = ("CPUPerc", "MemPerc", "MemUsage")
+LOG_TIMESTAMP = re.compile(r"\b\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z\b[\t ]*")
 
 
 def collector_stats(environment: dict[str, str] | None = None) -> dict[str, Any]:
@@ -100,4 +102,4 @@ def collector_stats(environment: dict[str, str] | None = None) -> dict[str, Any]
 def save_logs(destination: Path, environment: dict[str, str] | None = None) -> None:
     destination.parent.mkdir(parents=True, exist_ok=True)
     result = compose("logs", "--no-color", "collector", env=environment, check=False)
-    destination.write_text(result.stdout, encoding="utf-8")
+    destination.write_text(LOG_TIMESTAMP.sub("", result.stdout), encoding="utf-8")

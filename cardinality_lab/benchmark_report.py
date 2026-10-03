@@ -188,7 +188,7 @@ def correctness_section(lines: list[str], directory: Path) -> None:
         return
     recorded = json.loads(source.read_text(encoding="utf-8"))
     failures = recorded.get("assertion_failures")
-    lines.append(f"- Source: `results/REPORT.md`, collected {recorded['collected_at']}")
+    lines.append("- Source: `results/REPORT.md`")
     lines.append(
         f"- Runs: {len(recorded['runs'])} across modes {', '.join(recorded['modes'])}"
     )
@@ -482,16 +482,6 @@ def render_markdown(payload: dict[str, Any], directory: Path) -> str:
     lines = [
         "# Cardinality Guardian benchmark",
         "",
-        (
-            f"- Initial collection started at: {payload['collected_at']}"
-            if "resumed_at" in payload
-            else f"- Collected at: {payload['collected_at']}"
-        ),
-        *(
-            [f"- Last resumed at: {payload['resumed_at']}"]
-            if "resumed_at" in payload
-            else []
-        ),
         f"- Platform: {payload['platform']}",
         "- Versions: "
         + ", ".join(f"{key} {value}" for key, value in payload["versions"].items()),

@@ -17,7 +17,7 @@ OUTPUT = {"baseline": 200, "tag_only": 200, "strip_and_reaggregate": 21}
 
 
 def observation(mode: str, unique: int) -> dict[str, Any]:
-    output = OUTPUT[mode]
+    output = OUTPUT.get(mode, unique)
     return {
         "identity_family": "lab_bench_delta_sum_total",
         "input_identity_series": unique,
@@ -141,6 +141,164 @@ def test_summary_groups_by_suite_case_mode_and_metric(payload: dict) -> None:
     )
     assert strip[0]["output_identity_series"]["median"] == 21
     assert strip[0]["reduction"]["median"] == pytest.approx(0.979)
+
+
+def histogram_observation(strategy: str) -> dict[str, Any]:
+    native = strategy == "exponential-native"
+    identity = {"baseline": 200, "sdk-view": 20, "filter": 0}.get(strategy, 200)
+    per_identity = 1 if native else 11
+    base = "lab_bench_delta_histogram"
+    answers = {
+        "total_requests": 600.0,
+        "p95_by_method": 9.5,
+        "requests_by_status": 120.0,
+        "p95_for_one_user": None if strategy == "sdk-view" else 6.5,
+    }
+    shape = "native" if native else "classic"
+    return {
+        "identity_family": base if native else f"{base}_count",
+        "representation": "absent" if identity == 0 else shape,
+        "input_identity_series": 200,
+        "output_identity_series": identity,
+        "reduction": round(1 - identity / 200, 6),
+        "family_series": {f"{base}_count": identity},
+        "total_family_series": identity * per_identity,
+        "series_by_job": {"lab-metrics": 220, "lab-overflow": 1980}
+        if strategy == "routing"
+        else {"lab-metrics": identity * per_identity},
+        "questions": {
+            name: {
+                "query": f"sum({base}_count)",
+                "value": None if identity == 0 else value,
+                "error": None,
+            }
+            for name, value in answers.items()
+        },
+        "reaggregation_supported": False,
+        "prometheus_shape": "classic histogram",
+        "labels": {
+            "series": identity,
+            "distinct_label_values": {"user_id": identity},
+            "overflow_marker_series": 0,
+            "overflow_sentinel_series": 0,
+        },
+    }
+
+
+@pytest.fixture
+def histogram_payload(payload: dict[str, Any]) -> dict[str, Any]:
+    strategies = [
+        "baseline",
+        "transform-delete",
+        "sdk-view",
+        "filter",
+        "routing",
+        "exponential-native",
+    ]
+    for strategy in strategies:
+        for repetition in (1, 2, 3):
+            item = run("histograms", "histogram-reduction", strategy, repetition, 200)
+            item["metrics"] = {"delta_histogram": histogram_observation(strategy)}
+            dropped = 11 if strategy == "transform-delete" else 0
+            item["collector_log"] = {
+                "warn_lines": 2 * dropped,
+                "error_lines": 0,
+                "dropped_histogram_datapoints_logged": dropped,
+            }
+            payload["runs"].append(item)
+    payload["parameters"]["suites"].append("histograms")
+    payload["cases"] = [
+        {"name": "histogram-reduction", "strategies": strategies},
+    ]
+    payload["summary"] = summarize(payload)
+    return payload
+
+
+def test_histogram_section_lists_every_strategy_as_a_row(
+    histogram_payload: dict,
+    tmp_path: Path,
+) -> None:
+    report = render_markdown(histogram_payload, tmp_path / "benchmark")
+    assert "## Histogram reduction" in report
+    for strategy in ("baseline", "sdk-view", "filter", "exponential-native"):
+        assert f"| {strategy} | " in report
+
+
+def test_histogram_section_reports_a_lost_question_as_null(
+    histogram_payload: dict,
+    tmp_path: Path,
+) -> None:
+    report = render_markdown(histogram_payload, tmp_path / "benchmark")
+    assert "| sdk-view | classic | 20 | 220 | 600 | 9.500 | 120 | null |" in report
+    assert "| filter | absent | 0 | 0 | null | null | null | null |" in report
+
+
+def test_histogram_section_separates_a_second_exporter(
+    histogram_payload: dict,
+    tmp_path: Path,
+) -> None:
+    report = render_markdown(histogram_payload, tmp_path / "benchmark")
+    assert "| strategy | lab-metrics | lab-overflow |" in report
+    assert "| routing | 220 | 1980 |" in report
+
+
+def test_histogram_section_reports_the_collector_warnings_per_strategy(
+    histogram_payload: dict,
+    tmp_path: Path,
+) -> None:
+    report = render_markdown(histogram_payload, tmp_path / "benchmark")
+    assert "| transform-delete | 22 | 0 | 11 |" in report
+    assert "`baseline`, `sdk-view`, `filter`, `routing`, `exponential-native`" in report
+    assert "wrote no line at `warn` level or above" in report
+
+
+def test_histogram_section_says_so_when_no_strategy_logged_a_warning(
+    histogram_payload: dict,
+    tmp_path: Path,
+) -> None:
+    for item in histogram_payload["runs"]:
+        if item["suite"] == "histograms":
+            item["collector_log"] = dict.fromkeys(item["collector_log"], 0)
+    histogram_payload["summary"] = summarize(histogram_payload)
+    report = render_markdown(histogram_payload, tmp_path / "benchmark")
+    assert "Collector log: no strategy wrote a line at `warn` level or above" in report
+    assert "| strategy | warn lines |" not in report
+
+
+def test_a_recording_without_collector_logs_renders_without_the_log_table(
+    histogram_payload: dict,
+    tmp_path: Path,
+) -> None:
+    for item in histogram_payload["runs"]:
+        item.pop("collector_log", None)
+    histogram_payload["summary"] = summarize(histogram_payload)
+    report = render_markdown(histogram_payload, tmp_path / "benchmark")
+    assert "## Histogram reduction" in report
+    assert "Collector log" not in report
+    assert "warn lines" not in report
+
+
+def test_a_benchmark_report_without_the_suite_omits_the_section(
+    payload: dict,
+    tmp_path: Path,
+) -> None:
+    payload["summary"] = summarize(payload)
+    report = render_markdown(payload, tmp_path / "benchmark")
+    assert "## Histogram reduction" not in report
+
+
+def test_a_histogram_run_writes_its_own_report(
+    histogram_payload: dict,
+    tmp_path: Path,
+) -> None:
+    histogram_payload["parameters"]["suites"] = ["histograms"]
+    histogram_payload["parameters"]["modes"] = ["baseline", "sdk-view"]
+    report = render_markdown(histogram_payload, tmp_path / "histograms")
+    assert report.startswith("# Histogram reduction benchmark")
+    assert "- Strategies: baseline, sdk-view" in report
+    assert "## Metric compatibility" not in report
+    assert "## Correctness" not in report
+    assert "## Histogram reduction" in report
 
 
 def test_report_contains_every_required_section(payload: dict, tmp_path: Path) -> None:

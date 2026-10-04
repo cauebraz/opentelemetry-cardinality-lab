@@ -19,6 +19,7 @@ services:
       - "127.0.0.1:14317:4317"
       - "127.0.0.1:18888:8888"
       - "127.0.0.1:19464:9464"
+      - "127.0.0.1:19465:9465"
       - "127.0.0.1:13133:13133"
     read_only: true
     tmpfs:
@@ -36,7 +37,7 @@ services:
       - --storage.tsdb.retention.time=1h
       - --web.enable-lifecycle
     volumes:
-      - ./config/prometheus.yaml:/etc/prometheus/prometheus.yaml:ro
+      - ${PROMETHEUS_CONFIG:-./config/prometheus.yaml}:/etc/prometheus/prometheus.yaml:ro
       - prometheus-data:/prometheus
     ports:
       - "127.0.0.1:19090:9090"

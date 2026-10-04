@@ -2,6 +2,7 @@ import argparse
 import json
 import platform
 import time
+import urllib.error
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -23,21 +24,31 @@ from cardinality_lab.prometheus import (
     collector_counters,
     families_series_count,
     label_profile,
+    query_value,
     series_count,
+    series_count_by_job,
+    wait_for_accepted_points,
     wait_until_stable,
 )
+from cardinality_lab.sdk_emitter import emit_histogram
 from cardinality_lab.stack import (
     BENCHMARK_RESULTS,
     EPOCH_SECONDS,
+    HISTOGRAM_RESULTS,
     MODES,
     OTLP_ENDPOINT,
     PROMETHEUS_URL,
+    SDK_EMITTER,
+    STRATEGIES_BY_NAME,
     THRESHOLD,
+    Strategy,
     collector_stats,
     environment_for,
+    log_summary,
     save_logs,
     start,
     stop,
+    strategy_for,
 )
 from cardinality_lab.workloads import (
     WORKLOADS_BY_NAME,
@@ -48,7 +59,7 @@ from cardinality_lab.workloads import (
     sustained_plan,
 )
 
-RESULTS_VERSION = 4
+RESULTS_VERSION = 5
 SERVICE_NAME = "otel-cardinality-lab"
 MATRIX_UNIQUE_VALUES = 200
 BURST_UNIQUE_VALUES = 2000
@@ -57,8 +68,27 @@ EPOCH_REPEATS = 3
 SCALE_VALUES = (100, 1_000, 10_000)
 LARGE_SCALE_VALUES = (100_000,)
 OFFENDER_UNIQUE_VALUES = 1_000
+HISTOGRAM_UNIQUE_VALUES = 200
 RESOURCE_SAMPLES = 3
 DEFAULT_METRIC = "delta_sum"
+HISTOGRAM_METRIC = "delta_histogram"
+HISTOGRAM_SUITE = "histograms"
+HISTOGRAM_STRATEGIES = (
+    "baseline",
+    "strip_and_reaggregate",
+    "transform-delete",
+    "transform-aggregate",
+    "filter",
+    "sdk-baseline",
+    "sdk-view",
+    "routing",
+    "routing-string",
+    "exponential",
+    "exponential-native",
+)
+HISTOGRAM_FAMILY_SUFFIXES = ("_bucket", "_sum", "_count", "")
+SAMPLED_USER = "user-000042"
+SAMPLED_STATUS = "500"
 
 
 @dataclass(frozen=True)
@@ -70,10 +100,14 @@ class Case:
     metric_keys: tuple[str, ...]
     unique_values: int
     plan: list[Batch] = field(repr=False)
+    strategies: tuple[str, ...] = ()
 
     @property
     def specs(self) -> tuple[MetricSpec, ...]:
         return tuple(SPECS_BY_KEY[key] for key in self.metric_keys)
+
+    def modes(self, requested: tuple[str, ...]) -> tuple[str, ...]:
+        return self.strategies or requested
 
 
 def matrix_cases() -> list[Case]:
@@ -158,7 +192,79 @@ def offender_cases() -> list[Case]:
     ]
 
 
-SUITES = ("metrics", "epochs", "scale", "offenders")
+@dataclass(frozen=True)
+class Question:
+    """One thing an operator asks of a histogram, in both representations."""
+
+    name: str
+    description: str
+    classic: str
+    native: str
+
+    def expression(self, representation: str) -> str:
+        return self.native if representation == "native" else self.classic
+
+
+def questions_for(base: str) -> tuple[Question, ...]:
+    return (
+        Question(
+            name="total_requests",
+            description="How many observations the metric carries.",
+            classic=f"sum({base}_count)",
+            native=f"sum(histogram_count({base}))",
+        ),
+        Question(
+            name="p95_by_method",
+            description="The slowest 95th percentile across HTTP methods.",
+            classic=(
+                f"max(histogram_quantile(0.95, sum by (le, http_method) "
+                f"({base}_bucket)))"
+            ),
+            native=(f"max(histogram_quantile(0.95, sum by (http_method) ({base})))"),
+        ),
+        Question(
+            name="requests_by_status",
+            description=f"Observations carrying http.status_code {SAMPLED_STATUS}.",
+            classic=f'sum({base}_count{{http_status_code="{SAMPLED_STATUS}"}})',
+            native=(
+                f'sum(histogram_count({base}{{http_status_code="{SAMPLED_STATUS}"}}))'
+            ),
+        ),
+        Question(
+            name="p95_for_one_user",
+            description=f"The 95th percentile for {SAMPLED_USER} alone.",
+            classic=(
+                f"histogram_quantile(0.95, sum by (le) "
+                f'({base}_bucket{{user_id="{SAMPLED_USER}"}}))'
+            ),
+            native=(
+                f'histogram_quantile(0.95, sum({base}{{user_id="{SAMPLED_USER}"}}))'
+            ),
+        ),
+    )
+
+
+def histogram_cases() -> list[Case]:
+    return [
+        Case(
+            suite=HISTOGRAM_SUITE,
+            name="histogram-reduction",
+            description=(
+                f"{HISTOGRAM_UNIQUE_VALUES} unique attribute sets on one delta "
+                "histogram, under each strategy that claims to reduce "
+                "histogram cardinality."
+            ),
+            workload="histogram-user-id",
+            metric_keys=(HISTOGRAM_METRIC,),
+            unique_values=HISTOGRAM_UNIQUE_VALUES,
+            plan=burst_plan(HISTOGRAM_UNIQUE_VALUES),
+            strategies=HISTOGRAM_STRATEGIES,
+        )
+    ]
+
+
+DEFAULT_SUITES = ("metrics", "epochs", "scale", "offenders")
+SUITES = (*DEFAULT_SUITES, HISTOGRAM_SUITE)
 
 
 def build_cases(
@@ -172,6 +278,7 @@ def build_cases(
         "epochs": lambda: epoch_cases(epoch_seconds),
         "scale": lambda: scale_cases(scale_values),
         "offenders": offender_cases,
+        HISTOGRAM_SUITE: histogram_cases,
     }
     cases: list[Case] = []
     for suite in suites:
@@ -204,6 +311,123 @@ def observe_metric(spec: MetricSpec, unique_values: int, labels: list[str]) -> d
         "prometheus_shape": spec.prometheus_shape,
         "labels": label_profile(PROMETHEUS_URL, spec.identity_family, labels),
     }
+
+
+def histogram_observation(
+    spec: MetricSpec,
+    unique_values: int,
+    strategy: Strategy,
+    labels: list[str],
+) -> dict[str, Any]:
+    """What a histogram looks like in Prometheus, in either representation."""
+    base = spec.prometheus_base
+    families = {
+        f"{base}{suffix}": series_count(PROMETHEUS_URL, f"{base}{suffix}")
+        for suffix in HISTOGRAM_FAMILY_SUFFIXES
+    }
+    classic = families[f"{base}_count"]
+    native = families[base]
+    if classic:
+        representation = "classic"
+        identity_family = f"{base}_count"
+    elif native:
+        representation = "native"
+        identity_family = base
+    else:
+        representation = "absent"
+        identity_family = f"{base}_count"
+    output = families[identity_family]
+    return {
+        "identity_family": identity_family,
+        "representation": representation,
+        "input_identity_series": unique_values,
+        "output_identity_series": output,
+        "reduction": round(1 - output / unique_values, 6) if unique_values else 0.0,
+        "family_series": families,
+        "total_family_series": sum(families.values()),
+        "series_by_job": series_count_by_job(
+            PROMETHEUS_URL,
+            [f"{base}{suffix}" for suffix in HISTOGRAM_FAMILY_SUFFIXES],
+            strategy.jobs,
+        ),
+        "questions": answer_questions(base, representation),
+        "reaggregation_supported": spec.reaggregation_supported,
+        "prometheus_shape": spec.prometheus_shape,
+        "labels": label_profile(PROMETHEUS_URL, identity_family, labels),
+    }
+
+
+def answer_questions(base: str, representation: str) -> dict[str, Any]:
+    answers: dict[str, Any] = {}
+    for question in questions_for(base):
+        expression = question.expression(representation)
+        value: float | None = None
+        error: str | None = None
+        try:
+            value = query_value(PROMETHEUS_URL, expression)
+        except (OSError, urllib.error.HTTPError) as caught:
+            error = str(caught)
+        answers[question.name] = {
+            "query": expression,
+            "value": value,
+            "error": error,
+        }
+    return answers
+
+
+def send_sdk(
+    case: Case,
+    strategy: Strategy,
+    resource_attributes: dict[str, str],
+) -> dict[str, Any]:
+    """The SDK aggregates before export, so the sent datapoints are unknown."""
+    workload = WORKLOADS_BY_NAME[case.workload]
+    spec = case.specs[0]
+    emitted = emit_histogram(
+        spec.metric_name,
+        workload.attribute_sets(0, case.unique_values),
+        resource_attributes,
+        OTLP_ENDPOINT,
+        strategy.sdk_aggregation or "explicit",
+        strategy.sdk_attribute_keys,
+    )
+    send_seconds = float(emitted["send_seconds"])
+    recorded = int(emitted["recorded_measurements"])
+    return {
+        "emitter": SDK_EMITTER,
+        "sent_datapoints": None,
+        "recorded_measurements": recorded,
+        "exported_datapoints": None,
+        "sent_batches": 1,
+        "rejected_datapoints": 0,
+        "send_seconds": round(send_seconds, 3),
+        "schedule_lag_seconds": 0.0,
+        "plan_duration_seconds": 0.0,
+        "achieved_datapoints_per_second": 0.0,
+        "achieved_unique_values_per_second": round(case.unique_values / send_seconds, 1)
+        if send_seconds > 0
+        else 0.0,
+        "phases": [],
+    }
+
+
+def resolve_exported_rate(
+    sending: dict[str, Any],
+    counters: dict[str, float | None],
+) -> None:
+    """The SDK aggregates before export, so its rate comes from the receiver.
+
+    Both emitters then report datapoints per second over the same unit, instead
+    of recordings for one and exported datapoints for the other.
+    """
+    exported = sending["sent_datapoints"]
+    if exported is None:
+        accepted = counters["otelcol_receiver_accepted_metric_points"]
+        exported = None if accepted is None else int(accepted)
+    sending["exported_datapoints"] = exported
+    seconds = sending["send_seconds"]
+    if exported is not None and seconds > 0:
+        sending["achieved_datapoints_per_second"] = round(exported / seconds, 1)
 
 
 def send_plan(
@@ -252,7 +476,9 @@ def send_plan(
 
     send_seconds = time.monotonic() - started
     return {
+        "emitter": "otlp",
         "sent_datapoints": sent_datapoints,
+        "exported_datapoints": sent_datapoints,
         "sent_batches": len(case.plan),
         "rejected_datapoints": rejected,
         "send_seconds": round(send_seconds, 3),
@@ -286,33 +512,65 @@ def run_case(
     repetition: int,
     threshold: int,
     epoch_seconds: int,
+    destination: Path = BENCHMARK_RESULTS,
 ) -> dict[str, Any]:
     workload = WORKLOADS_BY_NAME[case.workload]
+    strategy = strategy_for(mode)
+    histograms = case.suite == HISTOGRAM_SUITE
     environment = environment_for(mode, threshold, epoch_seconds)
+    log_path = destination / "logs" / f"{case.name}-{mode}-{repetition}.log"
+    log_text: str | None = None
     start(environment)
     started = time.monotonic()
     try:
         resource_attributes = {"service.name": SERVICE_NAME, "scenario": case.name}
-        with Sender(OTLP_ENDPOINT) as sender:
-            sending = send_plan(case, sender, resource_attributes)
-        families = [
-            family for spec in case.specs for family in spec.prometheus_families()
-        ]
+        if strategy.emitter == SDK_EMITTER:
+            sending = send_sdk(case, strategy, resource_attributes)
+        else:
+            with Sender(OTLP_ENDPOINT) as sender:
+                sending = send_plan(case, sender, resource_attributes)
         settle_started = time.monotonic()
-        wait_until_stable(PROMETHEUS_URL, families)
+        if histograms:
+            base = case.specs[0].prometheus_base
+            families = [f"{base}{suffix}" for suffix in HISTOGRAM_FAMILY_SUFFIXES]
+            wait_for_accepted_points(PROMETHEUS_URL, expected_points(case, sending))
+            wait_until_stable(
+                PROMETHEUS_URL,
+                families,
+                require_nonzero=strategy.exports,
+            )
+        else:
+            families = [
+                family for spec in case.specs for family in spec.prometheus_families()
+            ]
+            wait_until_stable(PROMETHEUS_URL, families)
         settle_seconds = time.monotonic() - settle_started
         labels = list(workload.unbounded_attributes)
         prometheus_labels = [label.replace(".", "_") for label in labels]
-        observations = {
-            spec.key: observe_metric(spec, case.unique_values, prometheus_labels)
-            for spec in case.specs
-        }
+        if histograms:
+            observations = {
+                spec.key: histogram_observation(
+                    spec,
+                    case.unique_values,
+                    strategy,
+                    prometheus_labels,
+                )
+                for spec in case.specs
+            }
+        else:
+            observations = {
+                spec.key: observe_metric(spec, case.unique_values, prometheus_labels)
+                for spec in case.specs
+            }
         counters = collector_counters(PROMETHEUS_URL)
+        resolve_exported_rate(sending, counters)
+        log_text = save_logs(log_path, environment)
         return {
             "suite": case.suite,
             "case": case.name,
             "description": case.description,
             "mode": mode,
+            "strategy": strategy.description,
             "repetition": repetition,
             "workload": case.workload,
             "unbounded_attributes": labels,
@@ -325,29 +583,34 @@ def run_case(
             "total_seconds": round(time.monotonic() - started, 3),
             "metrics": observations,
             "collector_counters": counters,
+            "collector_log": log_summary(log_text),
             "self_metrics": cardinality_self_metrics(PROMETHEUS_URL),
             "resource_samples": resource_samples(environment),
-            "validity": validity(case, sending, counters),
+            "validity": validity(case, sending, counters, strategy.exports),
         }
     finally:
-        save_logs(
-            BENCHMARK_RESULTS / "logs" / f"{case.name}-{mode}-{repetition}.log",
-            environment,
-        )
+        if log_text is None:
+            save_logs(log_path, environment)
         stop(environment)
+
+
+def expected_points(case: Case, sending: dict[str, Any]) -> float:
+    sent = sending["sent_datapoints"]
+    return float(sent) if sent is not None else 1.0
 
 
 def validity(
     case: Case,
     sending: dict[str, Any],
     counters: dict[str, float | None],
+    expect_export: bool = True,
 ) -> dict[str, Any]:
-    expected = plan_unique_values(case.plan) * len(case.metric_keys)
+    sent = sending["sent_datapoints"]
     notes = []
-    if sending["sent_datapoints"] != expected:
-        notes.append(
-            f"sent {sending['sent_datapoints']} datapoints, expected {expected}"
-        )
+    if sent is not None:
+        expected = plan_unique_values(case.plan) * len(case.metric_keys)
+        if sent != expected:
+            notes.append(f"sent {sent} datapoints, expected {expected}")
     if sending["rejected_datapoints"]:
         notes.append(f"{sending['rejected_datapoints']} datapoints rejected by OTLP")
     accepted = counters["otelcol_receiver_accepted_metric_points"]
@@ -356,21 +619,21 @@ def validity(
     failed = counters["otelcol_exporter_send_failed_metric_points"]
     if accepted is None:
         notes.append("receiver accepted counter is unavailable")
-    elif accepted != sending["sent_datapoints"]:
-        notes.append(
-            f"receiver accepted {accepted:g} datapoints, "
-            f"sent {sending['sent_datapoints']}"
-        )
+    elif sent is not None and accepted != sent:
+        notes.append(f"receiver accepted {accepted:g} datapoints, sent {sent}")
+    elif sent is None and accepted <= 0:
+        notes.append("receiver accepted no datapoints")
     if refused is None:
         notes.append("receiver refused counter is unavailable")
     elif refused:
         notes.append(f"receiver refused {refused:g} datapoints")
-    if exported is None:
-        notes.append("exporter sent counter is unavailable")
-    elif accepted is not None and not 0 < exported <= accepted:
-        notes.append(
-            f"exporter sent {exported:g} datapoints after accepting {accepted:g}"
-        )
+    if expect_export:
+        if exported is None:
+            notes.append("exporter sent counter is unavailable")
+        elif accepted is not None and not 0 < exported <= accepted:
+            notes.append(
+                f"exporter sent {exported:g} datapoints after accepting {accepted:g}"
+            )
     if failed:
         notes.append(f"exporter failed to send {failed:g} datapoints")
     planned = sending["plan_duration_seconds"]
@@ -432,7 +695,7 @@ def resume_from(
     expected = {
         (case["name"], mode, repetition)
         for case in payload["cases"]
-        for mode in payload["parameters"]["modes"]
+        for mode in (case["strategies"] or payload["parameters"]["modes"])
         for repetition in range(1, payload["parameters"]["repetitions"] + 1)
     }
     unexpected = done - expected
@@ -446,8 +709,8 @@ def resume_from(
 
 def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--suites", default=",".join(SUITES))
-    parser.add_argument("--modes", default=",".join(MODES))
+    parser.add_argument("--suites", default=",".join(DEFAULT_SUITES))
+    parser.add_argument("--modes", default=None)
     parser.add_argument("--repetitions", type=int, default=3)
     parser.add_argument("--threshold", type=int, default=THRESHOLD)
     parser.add_argument("--epoch-seconds", type=int, default=EPOCH_SECONDS)
@@ -460,9 +723,17 @@ def main() -> None:
     if args.epoch_seconds < 10:
         raise ValueError("--epoch-seconds must be at least 10")
     suites = tuple(item.strip() for item in args.suites.split(",") if item.strip())
-    modes = tuple(item.strip() for item in args.modes.split(",") if item.strip())
+    histograms_only = set(suites) == {HISTOGRAM_SUITE}
+    if HISTOGRAM_SUITE in suites and not histograms_only:
+        raise ValueError(
+            f"the {HISTOGRAM_SUITE} suite writes its own report; run it alone"
+        )
+    destination = HISTOGRAM_RESULTS if histograms_only else BENCHMARK_RESULTS
+    default_modes = HISTOGRAM_STRATEGIES if histograms_only else MODES
+    requested = args.modes or ",".join(default_modes)
+    modes = tuple(item.strip() for item in requested.split(",") if item.strip())
     for mode in modes:
-        if mode not in MODES:
+        if mode not in STRATEGIES_BY_NAME:
             raise ValueError(f"unknown mode: {mode}")
     cases = build_cases(suites, args.epoch_seconds, args.large_scale)
 
@@ -493,6 +764,7 @@ def main() -> None:
                 "unique_values": case.unique_values,
                 "batches": len(case.plan),
                 "plan_duration_seconds": plan_duration_seconds(case.plan),
+                "strategies": list(case.strategies),
             }
             for case in cases
         ],
@@ -500,13 +772,13 @@ def main() -> None:
     }
     done: set[tuple[str, str, int]] = set()
     if args.resume:
-        payload, done = resume_from(BENCHMARK_RESULTS / "results.json", payload)
+        payload, done = resume_from(destination / "results.json", payload)
 
-    total = len(cases) * len(modes) * args.repetitions
+    total = sum(len(case.modes(modes)) for case in cases) * args.repetitions
     position = 0
     try:
         for case in cases:
-            for mode in modes:
+            for mode in case.modes(modes):
                 for repetition in range(1, args.repetitions + 1):
                     position += 1
                     if (case.name, mode, repetition) in done:
@@ -522,10 +794,11 @@ def main() -> None:
                             repetition,
                             args.threshold,
                             args.epoch_seconds,
+                            destination,
                         )
                     )
     finally:
-        write_benchmark_results(payload, BENCHMARK_RESULTS)
+        write_benchmark_results(payload, destination)
 
     invalid = [run for run in payload["runs"] if not run["validity"]["ok"]]
     if invalid:
@@ -536,7 +809,7 @@ def main() -> None:
                 for run in invalid
             )
         )
-    print(f"results: {BENCHMARK_RESULTS / 'REPORT.md'}")
+    print(f"results: {destination / 'REPORT.md'}")
 
 
 if __name__ == "__main__":

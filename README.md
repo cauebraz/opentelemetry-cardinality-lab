@@ -10,12 +10,13 @@ The lab does not propose another collector or cardinality product. It exercises
 the upstream processor as released, records the resulting active series, and
 turns its documented edge cases into regression assertions.
 
-It has two halves that never share a result file:
+It has three halves that never share a result file:
 
 | Half | Command | Question | Output |
 | --- | --- | --- | --- |
 | Correctness | `just experiment` | Does the processor do exactly what it must? Fails the run on any mismatch. | `results/` |
 | Benchmark | `just benchmark` | How much does it change, per metric shape, per epoch and per input cardinality, against a Collector without the processor? | `results/benchmark/` |
+| Histogram reduction | `just benchmark-histograms` | The processor leaves histograms untouched. What does reduce them, and which question does each option cost? | `results/histograms/` |
 
 ## Why this exists
 
@@ -40,6 +41,12 @@ explosion from 200 active series to 21, an 89.5% reduction. The same modes left
 the histogram at 200 active series. All three repetitions produced the same
 counts. Source: [`results/results.json`](results/results.json).
 
+Of the options that do reduce a histogram, the one that reduced series without
+losing a question kept every identity: exponential buckets scraped as native
+histograms held the same 200 identities in 200 series instead of 2,200. Every
+option that reduced identities cost the per-user percentile. Source:
+[`results/histograms/results.json`](results/histograms/results.json).
+
 ## Experiment
 
 The default run sends 200 data points per scenario, repeats every mode three
@@ -63,10 +70,10 @@ The benchmark adds a fourth mode, `baseline`, running
 pipeline with the processor removed. Every number therefore has an unprocessed
 reference measured on the same stack.
 
-Because the OpenTelemetry Python SDK has no Summary and no Exponential
-Histogram instrument, the benchmark encodes OTLP protobuf directly
-([`cardinality_lab/otlp.py`](cardinality_lab/otlp.py)) so all eight metric
-shapes can be compared.
+Because the OpenTelemetry Python SDK has no Summary instrument and reaches an
+exponential histogram only through a view, the benchmark encodes OTLP protobuf
+directly ([`cardinality_lab/otlp.py`](cardinality_lab/otlp.py)) so all eight
+metric shapes can be compared.
 
 | Suite | Command | What it varies |
 | --- | --- | --- |
@@ -99,6 +106,46 @@ per-repetition samples and a `validity` object per run.
 Methodology, dependent variables and measurement barriers:
 [`docs/METHODOLOGY.md`](docs/METHODOLOGY.md).
 
+## Histogram reduction
+
+The benchmark above shows the processor leaving histograms at their input
+series count. This suite asks what does reduce them. It replaces the
+enforcement mode with a strategy: a Collector config, a Prometheus config, an
+emitter, and whether the pipeline is expected to export anything at all,
+selected together by name in
+[`cardinality_lab/stack.py`](cardinality_lab/stack.py).
+
+| Strategy | What it does |
+| --- | --- |
+| `baseline` | The pipeline without the processor |
+| `strip_and_reaggregate` | The Cardinality Guardian, for reference |
+| `transform-delete` | `transform` deletes the unbounded attribute key |
+| `transform-aggregate` | `transform` aggregates on the remaining attributes |
+| `filter` | `filter` drops every datapoint carrying the attribute |
+| `sdk-baseline` | The Python SDK with every attribute, as an emitter reference |
+| `sdk-view` | A Python SDK view limits the instrument's attribute keys |
+| `routing` | `tag_only` plus the `routing` connector and a second exporter |
+| `routing-string` | The same routing table with the marker read as a string |
+| `exponential` | Exponential buckets, scraped as text |
+| `exponential-native` | Exponential buckets, scraped as native histograms |
+
+Each strategy is measured twice over: the Prometheus series it produces, and
+four fixed PromQL queries that stand for what an operator asks of a histogram.
+A query that returns nothing is recorded as `null`, which is the price of the
+reduction in the same row as its benefit. The Collector log of each run is
+counted as well: lines at `warn` level or above, and lines carrying
+`Dropped misaligned histogram datapoint`, so a strategy that changes a count
+while logging the drop is told apart from one that does it silently.
+
+```bash
+just benchmark-histograms          # three repetitions, about nine minutes
+just render results/histograms     # re-render the report from the recorded run
+```
+
+The suite runs alone and writes
+[`results/histograms/REPORT.md`](results/histograms/REPORT.md), so the
+benchmark artifacts above stay as they were published.
+
 ## Run
 
 Requirements:
@@ -124,6 +171,8 @@ The experiment binds only to localhost:
 - OTLP gRPC: `127.0.0.1:14317`
 - Collector self-telemetry: `127.0.0.1:18888`
 - Exported metrics: `127.0.0.1:19464`
+- Exported metrics, second exporter in the routing strategies:
+  `127.0.0.1:19465`
 - Collector health: `127.0.0.1:13133`
 - Prometheus: `127.0.0.1:19090`
 
@@ -158,9 +207,12 @@ dependency is exact in `pyproject.toml` and resolved transitively in `uv.lock`.
   microbenchmarks for processor CPU cost.
 - The benchmark reports the rate the harness achieved, not the rate the
   Collector can absorb.
-- The Collector's Prometheus exporter renders OTLP exponential histograms as
-  classic bucketed histograms, so the lab says nothing about native
-  histograms.
+- The Collector's Prometheus exporter converts OTLP exponential histograms to
+  native histograms, and a scrape job reads them as native only with
+  `scrape_native_histograms: true`. Only the `exponential-native` strategy
+  sets it, so every other run that carries an exponential histogram sees a
+  single `+Inf` bucket. Classic histograms keep their explicit buckets in
+  every run.
 - HyperLogLog++ is probabilistic. Repetitions expose variation rather than
   treating one run as universal evidence.
 - The configured threshold is deliberately small to keep the experiment fast.
@@ -168,17 +220,21 @@ dependency is exact in `pyproject.toml` and resolved transitively in `uv.lock`.
 ## Report a mismatch
 
 When a run against your own workload produces numbers that differ from the
-tables here or in the article, open an issue in this repository with the
-enforcement mode, the scenario or benchmark suite, the Collector version, and
-the `results/results.json` or `results/benchmark/results.json` the run
-produced. A collector log from `results/` helps when the processor was
+tables here or in the articles, open an issue in this repository with the
+enforcement mode or strategy, the scenario or benchmark suite, the Collector
+version, and the `results.json` the run produced, from `results/`,
+`results/benchmark/` or `results/histograms/`. A collector log from `results/` helps when the processor was
 expected to enforce and did not.
 
 ## Source material
 
-- [Cardinality Guardian processor](https://github.com/open-telemetry/opentelemetry-collector-contrib/tree/v0.162.0/processor/cardinalityguardianprocessor)
+- [Cardinality Guardian processor at `v0.162.0`](https://github.com/open-telemetry/opentelemetry-collector-contrib/tree/ae8c507510f48f433ab47dd1c6b01a59d6c388b5/processor/cardinalityguardianprocessor)
 - [Collector internal telemetry](https://opentelemetry.io/docs/collector/internal-telemetry/)
-- [Prometheus exporter](https://github.com/open-telemetry/opentelemetry-collector-contrib/tree/v0.162.0/exporter/prometheusexporter)
+- [Prometheus exporter at `v0.162.0`](https://github.com/open-telemetry/opentelemetry-collector-contrib/tree/ae8c507510f48f433ab47dd1c6b01a59d6c388b5/exporter/prometheusexporter)
+- [Transform processor at `v0.162.0`](https://github.com/open-telemetry/opentelemetry-collector-contrib/tree/ae8c507510f48f433ab47dd1c6b01a59d6c388b5/processor/transformprocessor)
+- [Filter processor at `v0.162.0`](https://github.com/open-telemetry/opentelemetry-collector-contrib/tree/ae8c507510f48f433ab47dd1c6b01a59d6c388b5/processor/filterprocessor)
+- [Routing connector at `v0.162.0`](https://github.com/open-telemetry/opentelemetry-collector-contrib/tree/ae8c507510f48f433ab47dd1c6b01a59d6c388b5/connector/routingconnector)
+- [Prometheus native histograms](https://prometheus.io/docs/specs/native_histograms/)
 
 ## License
 

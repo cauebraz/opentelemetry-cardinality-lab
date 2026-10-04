@@ -1,3 +1,4 @@
+import argparse
 import json
 import statistics
 from collections.abc import Callable, Sequence
@@ -7,6 +8,8 @@ from typing import Any
 Item = dict[str, Any] | None
 Renderer = Callable[[Item], str]
 
+LOG_FIELDS = ("warn_lines", "error_lines", "dropped_histogram_datapoints_logged")
+
 LIMITATIONS = (
     "Single-host Docker Compose on one machine. Numbers are not a capacity "
     "model for a production Collector.",
@@ -15,12 +18,23 @@ LIMITATIONS = (
     "overhead.",
     "Cardinality estimation upstream is HyperLogLog++ with about 0.81% "
     "standard error, so retained counts near the threshold vary between runs.",
-    "The Collector's Prometheus exporter renders OTLP exponential histograms "
-    "as classic bucketed histograms, so this report cannot say anything "
-    "about native-histogram handling.",
+    "The Collector's Prometheus exporter converts OTLP exponential histograms "
+    "to native histograms, but a scrape job reads them as native only with "
+    "`scrape_native_histograms: true`. Only the `exponential-native` strategy "
+    "sets it, so every other exponential histogram arrives as a single `+Inf` "
+    "bucket. Classic histograms keep their explicit buckets in every run.",
     "Each run starts a fresh stack, so results exclude warm-cache and "
     "long-running drift effects.",
     "One threshold and one epoch duration per run; the report does not sweep them.",
+)
+
+HISTOGRAM_LIMITATIONS = (
+    "The histogram values are synthetic and repeat across identities, so the "
+    "percentile cells show whether a question can be answered, not what a real "
+    "latency distribution looks like.",
+    "The questions read the buckets directly instead of through `rate()`, "
+    "because the workload is one burst into a fresh stack and a rate over "
+    "constant series is zero. The cells describe the whole run, not a window.",
 )
 
 
@@ -62,6 +76,18 @@ def field(name: str, digits: int = 0) -> Renderer:
 
 def reduction_percent(item: Item) -> str:
     return "not run" if item is None else percent(item["reduction"])
+
+
+def question_summary(name: str, observations: list[dict[str, Any]]) -> dict[str, Any]:
+    answers = [item["questions"][name] for item in observations]
+    values = [answer["value"] for answer in answers if answer["value"] is not None]
+    return {
+        "query": answers[0]["query"],
+        "answered": len(values),
+        "repetitions": len(answers),
+        "value": stats(values),
+        "errors": sorted({answer["error"] for answer in answers if answer["error"]}),
+    }
 
 
 def summarize(payload: dict[str, Any]) -> list[dict[str, Any]]:
@@ -113,6 +139,30 @@ def summarize(payload: dict[str, Any]) -> list[dict[str, Any]]:
                     )
                     for label in first["labels"]["distinct_label_values"]
                 },
+                "representation": first.get("representation"),
+                "series_by_job": {
+                    job: stats([item["series_by_job"][job] for item in observations])
+                    for job in first.get("series_by_job", {})
+                },
+                "questions": {
+                    name: question_summary(name, observations)
+                    for name in first.get("questions", {})
+                },
+                "collector_log": {
+                    name: stats(
+                        [
+                            run["collector_log"][name]
+                            for run in runs
+                            if "collector_log" in run
+                        ]
+                    )
+                    for name in LOG_FIELDS
+                },
+                "emitter": runs[0]["sending"].get("emitter", "otlp"),
+                "rate_from_exported": all(
+                    run["sending"].get("exported_datapoints") is not None
+                    for run in runs
+                ),
                 "send_seconds": stats([run["sending"]["send_seconds"] for run in runs]),
                 "achieved_datapoints_per_second": stats(
                     [run["sending"]["achieved_datapoints_per_second"] for run in runs]
@@ -422,6 +472,174 @@ def offender_section(
     lines.append("")
 
 
+QUESTION_COLUMNS = (
+    "total_requests",
+    "p95_by_method",
+    "requests_by_status",
+    "p95_for_one_user",
+)
+
+
+def answer(item: Item, name: str) -> str:
+    if item is None or name not in item.get("questions", {}):
+        return "not run"
+    question = item["questions"][name]
+    if question["errors"]:
+        return "error"
+    summary = question["value"]
+    if summary["median"] is None:
+        return "null"
+    exact = summary["min"] == summary["max"] and float(summary["median"]).is_integer()
+    text = cell(summary, 0 if exact else 3)
+    if question["answered"] < question["repetitions"]:
+        text += f" ({question['answered']}/{question['repetitions']})"
+    return text
+
+
+def strategy_order(payload: dict[str, Any], case: str, rows: list[dict]) -> list[str]:
+    for definition in payload.get("cases", []):
+        if definition["name"] == case and definition.get("strategies"):
+            return list(definition["strategies"])
+    return sorted({row["mode"] for row in rows})
+
+
+def histogram_section(
+    lines: list[str],
+    payload: dict[str, Any],
+    summary: list[dict[str, Any]],
+) -> None:
+    lines.append("## Histogram reduction")
+    lines.append("")
+    rows = find(summary, suite="histograms")
+    if not rows:
+        lines.append("Not run.")
+        lines.append("")
+        return
+    case = rows[0]["case"]
+    strategies = strategy_order(payload, case, rows)
+    items = [(name, one(summary, suite="histograms", mode=name)) for name in strategies]
+    lines.append(
+        "Measured fact: Prometheus series and answerable queries for one delta "
+        f"histogram carrying {rows[0]['input_identity_series']} unique attribute "
+        "sets, under each strategy. A `null` cell means the query returned "
+        "nothing."
+    )
+    lines.append("")
+    header = (
+        "| strategy | representation | identity series | total series | "
+        + " | ".join(QUESTION_COLUMNS)
+        + " |"
+    )
+    lines.append(header)
+    lines.append("| --- " * (4 + len(QUESTION_COLUMNS)) + "|")
+    for name, item in items:
+        values = [
+            "not run" if item is None else item["representation"] or "unknown",
+            field("output_identity_series")(item),
+            field("total_family_series")(item),
+            *(answer(item, question) for question in QUESTION_COLUMNS),
+        ]
+        lines.append(f"| {name} | " + " | ".join(values) + " |")
+    lines.append("")
+    split = [
+        (name, item)
+        for name, item in items
+        if item is not None and len(item["series_by_job"]) > 1
+    ]
+    if split:
+        jobs = sorted(split[0][1]["series_by_job"])
+        lines.append(
+            "Series per Prometheus scrape job, for the strategies that write to "
+            "more than one exporter:"
+        )
+        lines.append("")
+        lines.append("| strategy | " + " | ".join(jobs) + " |")
+        lines.append("| --- " * (1 + len(jobs)) + "|")
+        for name, item in split:
+            counts = [cell(item["series_by_job"][job]) for job in jobs]
+            lines.append(f"| {name} | " + " | ".join(counts) + " |")
+        lines.append("")
+        silent = [
+            name
+            for name, item in split
+            if all(
+                summary["median"] == 0
+                for job, summary in item["series_by_job"].items()
+                if job != "lab-metrics"
+            )
+        ]
+        if silent:
+            lines.append(
+                f"`{'`, `'.join(silent)}` routed nothing and reported no error. "
+                "The processor writes `otel.metric.overflow` as a boolean, and "
+                "Prometheus renders that boolean as the label value `true`, so a "
+                "condition written from the exported metric compares a boolean "
+                "with a string and never matches."
+            )
+            lines.append("")
+    collector_log_section(lines, items)
+    lines.append(
+        "Interpretation: `total_requests` is an integrity check rather than a "
+        "question. A strategy that changes it did not trade a question for "
+        "series, it changed the answer. `p95_for_one_user` is the question every "
+        "reducing strategy is expected to lose."
+    )
+    lines.append("")
+
+
+def logged(item: Item, name: str) -> float | None:
+    if item is None or "collector_log" not in item:
+        return None
+    return item["collector_log"][name]["median"]
+
+
+def collector_log_section(lines: list[str], items: list[tuple[str, Item]]) -> None:
+    measured = [
+        (name, item) for name, item in items if logged(item, "warn_lines") is not None
+    ]
+    if not measured:
+        return
+    noisy = [
+        (name, item)
+        for name, item in measured
+        if (logged(item, "warn_lines") or 0) + (logged(item, "error_lines") or 0) > 0
+    ]
+    noisy_names = {name for name, _ in noisy}
+    quiet = [name for name, _ in measured if name not in noisy_names]
+    if not noisy:
+        lines.append(
+            "Collector log: no strategy wrote a line at `warn` level or above "
+            "during any run."
+        )
+        lines.append("")
+        return
+    lines.append(
+        "Collector log lines at `warn` level or above, per run, for the "
+        "strategies that wrote any:"
+    )
+    lines.append("")
+    lines.append(
+        "| strategy | warn lines | error lines | "
+        "`Dropped misaligned histogram datapoint` lines |"
+    )
+    lines.append("| --- | --- | --- | --- |")
+    for name, item in noisy:
+        values = [cell(item["collector_log"][field_name]) for field_name in LOG_FIELDS]
+        lines.append(f"| {name} | " + " | ".join(values) + " |")
+    lines.append("")
+    silence = (
+        f"`{'`, `'.join(quiet)}` wrote no line at `warn` level or above. "
+        if quiet
+        else ""
+    )
+    lines.append(
+        silence + "The Collector samples repeated log lines (10 per 10 s tick, then "
+        "every 100th by default), so a line count is a floor on the events it "
+        "reports, not the number of datapoints dropped."
+    )
+    lines.append("")
+
+
 def throughput_section(lines: list[str], summary: list[dict[str, Any]]) -> None:
     lines.append("## Workload execution")
     lines.append("")
@@ -447,12 +665,31 @@ def throughput_section(lines: list[str], summary: list[dict[str, Any]]) -> None:
             f"{cell(item['schedule_lag_seconds'], 3)} |"
         )
     lines.append("")
+    recordings = sorted(
+        {
+            item["mode"]
+            for item in summary
+            if item["emitter"] == "sdk" and not item["rate_from_exported"]
+        }
+    )
+    if recordings:
+        lines.append(
+            "The rate for "
+            + ", ".join(f"`{mode}`" for mode in recordings)
+            + " counts recorded measurements rather than exported datapoints. "
+            "The SDK aggregates before export, so this artifact predates the "
+            "receiver-counted rate and those cells are not comparable with the "
+            "rows above them."
+        )
+        lines.append("")
 
 
 def limitations_section(lines: list[str], payload: dict[str, Any]) -> None:
     lines.append("## Limitations")
     lines.append("")
     lines.extend(f"- {text}" for text in LIMITATIONS)
+    if "histograms" in payload["parameters"]["suites"]:
+        lines.extend(f"- {text}" for text in HISTOGRAM_LIMITATIONS)
     unavailable = sorted(
         {
             name
@@ -479,13 +716,17 @@ def render_markdown(payload: dict[str, Any], directory: Path) -> str:
     summary = payload["summary"]
     parameters = payload["parameters"]
     modes = list(parameters["modes"])
+    suites = set(parameters["suites"])
+    histograms_only = suites == {"histograms"}
     lines = [
-        "# Cardinality Guardian benchmark",
+        "# Histogram reduction benchmark"
+        if histograms_only
+        else "# Cardinality Guardian benchmark",
         "",
         f"- Platform: {payload['platform']}",
         "- Versions: "
         + ", ".join(f"{key} {value}" for key, value in payload["versions"].items()),
-        f"- Modes: {', '.join(modes)}",
+        f"- {'Strategies' if histograms_only else 'Modes'}: {', '.join(modes)}",
         f"- Repetitions per case: {parameters['repetitions']}",
         f"- Threshold: {parameters['threshold']} new values per "
         f"{parameters['epoch_seconds']}s epoch",
@@ -496,11 +737,14 @@ def render_markdown(payload: dict[str, Any], directory: Path) -> str:
         "parentheses when repetitions disagreed.",
         "",
     ]
-    correctness_section(lines, directory)
-    metric_compatibility_section(lines, modes, summary)
-    epoch_section(lines, modes, payload, summary)
-    scale_section(lines, modes, summary)
-    offender_section(lines, modes, summary)
+    if not histograms_only:
+        correctness_section(lines, directory)
+        metric_compatibility_section(lines, modes, summary)
+        epoch_section(lines, modes, payload, summary)
+        scale_section(lines, modes, summary)
+        offender_section(lines, modes, summary)
+    if "histograms" in suites:
+        histogram_section(lines, payload, summary)
     throughput_section(lines, summary)
     limitations_section(lines, payload)
     return "\n".join(lines).rstrip() + "\n"
@@ -517,3 +761,21 @@ def write_benchmark_results(payload: dict[str, Any], directory: Path) -> None:
         render_markdown(payload, directory),
         encoding="utf-8",
     )
+
+
+def main() -> None:
+    """Re-render a report from a recorded run, without touching the stack."""
+    parser = argparse.ArgumentParser()
+    parser.add_argument("directory")
+    args = parser.parse_args()
+    directory = Path(args.directory)
+    source = directory / "results.json"
+    write_benchmark_results(
+        json.loads(source.read_text(encoding="utf-8")),
+        directory,
+    )
+    print(f"results: {directory / 'REPORT.md'}")
+
+
+if __name__ == "__main__":
+    main()

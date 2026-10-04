@@ -18,6 +18,7 @@ CASES = [
         "unique_values": 100,
         "batches": 1,
         "plan_duration_seconds": 0.0,
+        "strategies": [],
     }
 ]
 
@@ -135,3 +136,16 @@ def test_resume_refuses_runs_outside_the_requested_scope(tmp_path: Path) -> None
     payload["runs"].append({"case": "scale-1000", "mode": "baseline", "repetition": 1})
     with pytest.raises(ValueError, match="outside the requested benchmark scope"):
         resume_from(write(tmp_path, payload), fresh())
+
+
+def test_resume_scopes_a_case_to_its_own_strategies(tmp_path: Path) -> None:
+    payload = recorded()
+    payload["cases"][0]["strategies"] = ["baseline", "filter"]
+    target = fresh()
+    target["cases"][0]["strategies"] = ["baseline", "filter"]
+    resumed, done = resume_from(write(tmp_path, payload), target)
+    assert len(resumed["runs"]) == 2
+    payload["runs"].append({"case": "scale-100", "mode": "sdk-view", "repetition": 1})
+    with pytest.raises(ValueError, match="outside the requested benchmark scope"):
+        resume_from(write(tmp_path, payload), target)
+    assert done

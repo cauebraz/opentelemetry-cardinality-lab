@@ -1,0 +1,52 @@
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+
+processors:
+  filter:
+    error_mode: propagate
+    metric_conditions:
+      - datapoint.attributes["user.id"] != nil
+  batch:
+    send_batch_size: 512
+    timeout: 1s
+
+exporters:
+  prometheus:
+    endpoint: 0.0.0.0:9464
+    metric_expiration: 5m
+    resource_constant_labels:
+      included:
+        - service.name
+        - scenario
+    translation_strategy: UnderscoreEscapingWithSuffixes
+
+extensions:
+  health_check:
+    endpoint: 0.0.0.0:13133
+
+service:
+  extensions:
+    - health_check
+  pipelines:
+    metrics:
+      receivers:
+        - otlp
+      processors:
+        - filter
+        - batch
+      exporters:
+        - prometheus
+  telemetry:
+    metrics:
+      level: detailed
+      readers:
+        - pull:
+            exporter:
+              prometheus:
+                host: 0.0.0.0
+                port: 8888
+                without_type_suffix: true
+                without_units: true

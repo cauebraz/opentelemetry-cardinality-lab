@@ -149,7 +149,7 @@ Measured fact: how fast the generator actually sent each case and how long Prome
 - Single-host Docker Compose on one machine. Numbers are not a capacity model for a production Collector.
 - Docker CPU and memory samples are diagnostic context only. The harness and the Collector share the same host, so they do not isolate processor overhead.
 - Cardinality estimation upstream is HyperLogLog++ with about 0.81% standard error, so retained counts near the threshold vary between runs.
-- The Collector's Prometheus exporter renders OTLP exponential histograms as classic bucketed histograms, so this report cannot say anything about native-histogram handling.
+- The Collector's Prometheus exporter converts OTLP exponential histograms to native histograms, but a scrape job reads them as native only with `scrape_native_histograms: true`. Only the `exponential-native` strategy sets it, so every other exponential histogram arrives as a single `+Inf` bucket. Classic histograms keep their explicit buckets in every run.
 - Each run starts a fresh stack, so results exclude warm-cache and long-running drift effects.
 - One threshold and one epoch duration per run; the report does not sweep them.
 - Collector telemetry did not expose these counters: `otelcol_exporter_send_failed_metric_points`, `otelcol_processor_incoming_items`, `otelcol_processor_outgoing_items`. `results.json` records them as `null`, not zero.

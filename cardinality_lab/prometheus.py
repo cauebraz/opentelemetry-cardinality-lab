@@ -5,6 +5,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 from collections.abc import Sequence
+from math import isnan
 from typing import Any
 
 
@@ -32,6 +33,15 @@ def query_scalar(base_url: str, query: str) -> float:
     if not result:
         return 0
     return float(result[0]["value"][1])
+
+
+def query_value(base_url: str, query: str) -> float | None:
+    """The first sample of a query, or None when it returned nothing usable."""
+    result = query_result(base_url, query)
+    if not result:
+        return None
+    value = float(result[0]["value"][1])
+    return None if isnan(value) else value
 
 
 def query_result(base_url: str, query: str) -> list[dict[str, Any]]:
@@ -67,6 +77,24 @@ def families_series_count(base_url: str, families: Sequence[str]) -> dict[str, i
     return {family: series_count(base_url, family) for family in families}
 
 
+def series_count_by_job(
+    base_url: str,
+    families: Sequence[str],
+    jobs: Sequence[str],
+) -> dict[str, int]:
+    """Series per scrape job, so a second exporter is not read as a reduction."""
+    selector = "|".join(families)
+    return {
+        job: round(
+            query_scalar(
+                base_url,
+                f'count({{__name__=~"{selector}", job="{job}"}})',
+            )
+        )
+        for job in jobs
+    }
+
+
 def label_values(base_url: str, family: str, label: str) -> list[str]:
     results = query_result(base_url, f'{{__name__="{family}"}}')
     return sorted(
@@ -97,12 +125,34 @@ def label_profile(base_url: str, family: str, labels: Sequence[str]) -> dict[str
     }
 
 
+def wait_for_accepted_points(
+    base_url: str,
+    minimum: float = 1.0,
+    timeout_seconds: float = 60.0,
+) -> float:
+    """Wait for the Collector to report that it received the workload."""
+    deadline = time.monotonic() + timeout_seconds
+    accepted: float | None = None
+    while time.monotonic() < deadline:
+        accepted = collector_counters(base_url)[
+            "otelcol_receiver_accepted_metric_points"
+        ]
+        if accepted is not None and accepted >= minimum:
+            return accepted
+        time.sleep(0.5)
+    raise TimeoutError(
+        f"the collector reported {accepted} accepted metric points, "
+        f"expected at least {minimum}"
+    )
+
+
 def wait_until_stable(
     base_url: str,
     families: Sequence[str],
     stable_scrapes: int = 3,
     poll_seconds: float = 1.0,
     timeout_seconds: float = 120.0,
+    require_nonzero: bool = True,
 ) -> dict[str, int]:
     """Poll until the family series counts stop changing, instead of sleeping."""
     deadline = time.monotonic() + timeout_seconds
@@ -111,7 +161,7 @@ def wait_until_stable(
     counts: dict[str, int] = {}
     while time.monotonic() < deadline:
         counts = families_series_count(base_url, families)
-        if counts == previous and any(counts.values()):
+        if counts == previous and (any(counts.values()) or not require_nonzero):
             repeats += 1
             if repeats >= stable_scrapes:
                 return counts
@@ -134,18 +184,27 @@ COLLECTOR_COUNTERS = (
     "otelcol_processor_outgoing_items",
 )
 
+COUNTER_SELECTORS = {
+    "otelcol_receiver_accepted_metric_points": ', receiver="otlp"',
+    "otelcol_receiver_refused_metric_points": ', receiver="otlp"',
+    "otelcol_exporter_sent_metric_points": ', exporter=~"prometheus.*"',
+    "otelcol_exporter_send_failed_metric_points": ', exporter=~"prometheus.*"',
+}
+
 
 def collector_counters(base_url: str) -> dict[str, float | None]:
+    """Delivery counters, scoped so a connector is not counted as a pipeline end."""
     payload = read_json(f"{base_url}/api/v1/label/__name__/values")
     available = set(payload["data"])
     counters: dict[str, float | None] = {}
     for name in COLLECTOR_COUNTERS:
         counters[name] = None
+        selector = COUNTER_SELECTORS.get(name, "")
         for candidate in (name, f"{name}_total"):
             if candidate in available:
                 counters[name] = query_scalar(
                     base_url,
-                    f'sum({{__name__="{candidate}"}})',
+                    f'sum({{__name__="{candidate}"{selector}}})',
                 )
                 break
     return counters

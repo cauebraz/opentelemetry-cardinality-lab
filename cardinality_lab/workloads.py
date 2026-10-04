@@ -25,6 +25,14 @@ def multiple_offenders(index: int) -> Mapping[str, str]:
     }
 
 
+def histogram_user_id(index: int) -> Mapping[str, str]:
+    return BOUNDED | {
+        "http.method": METHODS[index % len(METHODS)],
+        "http.status_code": STATUS_CODES[index % len(STATUS_CODES)],
+        "user.id": f"user-{index:06d}",
+    }
+
+
 @dataclass(frozen=True)
 class Workload:
     name: str
@@ -61,6 +69,15 @@ WORKLOADS: tuple[Workload, ...] = (
             "http.route",
             "customer.id",
         ),
+    ),
+    Workload(
+        name="histogram-user-id",
+        description=(
+            "One unbounded attribute (user.id) beside a bounded method and "
+            "status code, for the histogram reduction strategies."
+        ),
+        builder=histogram_user_id,
+        unbounded_attributes=("user.id",),
     ),
 )
 

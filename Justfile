@@ -27,8 +27,12 @@ build:
 
 validate: build
     docker compose config --quiet
-    docker compose run --rm --no-deps collector validate --config=/etc/otelcol-contrib/config.yaml
-    COLLECTOR_CONFIG=./config/collector-baseline.yaml docker compose run --rm --no-deps collector validate --config=/etc/otelcol-contrib/config.yaml
+    for config in ./config/collector.yaml ./config/collector-baseline.yaml ./config/collector-transform-delete.yaml ./config/collector-transform-aggregate.yaml ./config/collector-filter.yaml ./config/collector-routing.yaml ./config/collector-routing-string.yaml; do \
+      COLLECTOR_CONFIG="${config}" docker compose run --rm --no-deps collector validate --config=/etc/otelcol-contrib/config.yaml; \
+    done
+    for config in ./config/prometheus.yaml ./config/prometheus-routing.yaml ./config/prometheus-native.yaml; do \
+      PROMETHEUS_CONFIG="${config}" docker compose run --rm --no-deps --entrypoint promtool prometheus check config /etc/prometheus/prometheus.yaml; \
+    done
 
 check: format-check lint test validate
 
@@ -67,3 +71,9 @@ benchmark-scale-large repetitions="1": build
 
 benchmark-offenders repetitions="3": build
     uv run --frozen python -m cardinality_lab.benchmark --suites offenders --repetitions '{{repetitions}}'
+
+benchmark-histograms repetitions="3": build
+    uv run --frozen python -m cardinality_lab.benchmark --suites histograms --repetitions '{{repetitions}}'
+
+render directory="results/benchmark":
+    uv run --frozen python -m cardinality_lab.benchmark_report '{{directory}}'

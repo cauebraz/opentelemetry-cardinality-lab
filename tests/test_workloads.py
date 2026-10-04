@@ -28,6 +28,8 @@ def test_bounded_attributes_stay_bounded(workload: Workload) -> None:
     for key, value in BOUNDED.items():
         assert {attributes[key] for attributes in sets} == {value}
     assert len({attributes["http.method"] for attributes in sets}) == 4
+    if "http.status_code" in sets[0]:
+        assert len({attributes["http.status_code"] for attributes in sets}) == 5
 
 
 @pytest.mark.parametrize("workload", WORKLOADS, ids=lambda item: item.name)
@@ -46,6 +48,17 @@ def test_multiple_offenders_declares_four_correlated_attributes() -> None:
         "customer.id",
     )
     assert len(workload.attribute_sets(0, 100)) == 100
+
+
+def test_the_histogram_workload_pairs_every_method_with_every_status() -> None:
+    workload = WORKLOADS_BY_NAME["histogram-user-id"]
+    sets = workload.attribute_sets(0, 200)
+    pairs = {
+        (attributes["http.method"], attributes["http.status_code"])
+        for attributes in sets
+    }
+    assert len(pairs) == 20
+    assert workload.unbounded_attributes == ("user.id",)
 
 
 def test_attribute_sets_respect_the_first_index() -> None:
